@@ -1,73 +1,178 @@
 model{
 
 #Overall level, with all studies
-for (k in 2:ntALL){				## Random Effects to combine study type level effects
+for (k in 2:ntALL){				# Random Effects in combination of all studies from different study designs
   dRCT[k]~dnorm(d[k],tauALL)
   dOBS[k]~dnorm(d[k],tauALL)}
-for (k in (ntALL+1):ntRCT){			## Treatments not common in all designs. No changes where no additional information
+for (k in (ntALL+1):ntRCT){			# Treatments not common to all designs
   dRCT[k]~dnorm(0,0.0001)
   d[k]<-dRCT[k]}
 
 d[1]<-0
 for (k in 2:ntALL){d[k]~dnorm(0,0.0001)}	## Prior distributions
 
-sdALL~dunif(0,5)
+sdALL~dunif(0,5) # Prior for overall heterogeneity
 tauALL<-pow(sdALL,-2)
 
-for (c in 1:(nt-1)) {  ## Calculate pairwise comparisons
+for (c in 1:(nt-1)) {  # Pairwise comparisons
   for (k in (c+1):nt) {
 	  or[c,k]<-exp(d[k]-d[c])
 	  lor[c,k]<-(d[k]-d[c])}}
 
-for(k in 1:nt){ 	#Rank the treatment effects
-  rkworst[k]<-nt+1-rank(d[],k) #ranking treatment worst first
-  worst[k]<-equals(rkworst[k],1) #probability that treat is worst
-  rkbest[k]<-rank(d[],k) #ranking treatment best first
-  best[k]<-equals(rkbest[k],1)}
+for(k in 1:nt){ 	# Treatment ranking
+  rkworst[k]<-nt+1-rank(d[],k) # worst first
+  worst[k]<-equals(rkworst[k],1) #probability of being worst
+  rkbest[k]<-rank(d[],k) # best first
+  best[k]<-equals(rkbest[k],1)} #probability of being best
 
 #At design-level, with RCTs
-for(i in 1:nsRCT){  # LOOP THROUGH STUDIES
-	wRCT[i,1] <- 0   # adjustment for multi-arm trials is zero for control arm
-	deltaRCT[i,tRCT[i,1]] <- 0  # treatment effect is zero for control arm
+for(i in 1:nsRCT){  # Loop through studies
+	wRCT[i,1] <- 0   # No adjustment in multi-arm for reference arm
+	deltaRCT[i,bsRCT[i]] <- 0  # No treatment effect for reference arm
 	muRCT[i] ~ dnorm(0,.0001)  # vague priors for all trial baselines
 
-	for (k in 1:naRCT[i]) {  # LOOP THROUGH ARMS
+	for (k in 1:naRCT[i]) {  # Loop through arms
 
-		rRCT[i,k] ~ dbin(pRCT[i,k],nRCT[i,k])  # binomial likelihood
+		rRCT[i,k] ~ dbin(pRCT[i,k],nRCT[i,k])  # Binomial likelihood
 
-		# Logistic regression model with reference to arm 1
+		# Logistic regression model comparing to reference arm
 		logit(pRCT[i,k]) <- muRCT[i] + deltaRCT[i,tRCT[i,k]]
-		rhatRCR[i,k] <- pRCT[i,k] * nRCT[i,k]  # expected value of the numerators
-		devRCT[i,k] <- 2 * (rRCT[i,k] * (log(rRCT[i,k])-log(rhatRCT[i,k])) #Deviance contribution
+		rhatRCR[i,k] <- pRCT[i,k] * nRCT[i,k]  # expected value of cases
+		devRCT[i,k] <- 2 * (rRCT[i,k] * (log(rRCT[i,k])-log(rhatRCT[i,k])) #Deviance
 				+ (nRCT[i,k]-rRCT[i,k]) * (log(nRCT[i,k]-rRCT[i,k]) - log(nRCT[i,k]-rhatRCT[i,k])))
 			}
 
- 	resdevRCT[i] <- sum(devRCT[i,1:naRCT[i]])  # summed residual deviance contribution for this trial
+ 	resdevRCT[i] <- sum(devRCT[i,1:naRCT[i]])  # Summed residual deviance
 
  	for (k in 2:noTRCT[i]) {  # LOOP THROUGH ARMS
- 		deltaRCT[i,tRCT[i,k]] ~ dnorm(mdRCT[i,siRCT[i,k]],taudRCT[i,silRCT[i,k]]) # trial-specific LOR distributions
- 		mdRCT[i,tRCT[i,k]] <- dRCT[tRCT[i,k]] - dRCT[tRCT[i,1]] + swRCT[i,k]  # mean of LOR distributions (with multi-arm trial correction)
-		taudRCT[i,tRCT[i,k]] <- tauRCT *2*(k-1)/k  # precision of LOR distributions (with multi-arm trial correction)
- 		wRCT[i,k] <- (deltaRCT[i,tRCT[i,k]] - dRCT[t[i,k]] + dRCT[t[i,1]]) # adjustment for multi-arm RCTs
-		swRCT[i,k] <- sum(wRCT[i,1:k-1])/(k-1) # cumulative adjustment for multi-arm trials
+ 		deltaRCT[i,inRCT[i,k]] ~ dnorm(mdRCT[i,inRCT[i,k]],taudRCT[i,inRCT[i,k]]) # Study-specific log odds-ratio distributions
+ 		mdRCT[i,inRCT[i,k]] <- dRCT[inRCT[i,k]] - dRCT[bsRCT[i]] + swRCT[i,k]  # mean of log odds-ratios corrected for multi-arm
+		taudRCT[i,inRCT[i,k]] <- tauRCT *2*(k-1)/k  # precision of log odds-ratios corrected for multi-arm
+ 		wRCT[i,k] <- (deltaRCT[i,inRCT[i,k]] - dRCT[inRCT[i,k]] + dRCT[bsRCT[i]]) # adjustment for multi-arm
+		swRCT[i,k] <- sum(wRCT[i,1:k-1])/(k-1)
  			}
  		}
 
 totresdevRCT <- sum(resdevRCT[])   # Total Residual Deviance
 
-dRCT[1]<-0   # treatment effect is zero for reference treatment
-sdRCT ~ dunif(0,5)   # vague prior for between-trial SD
-tauRCT <- pow(sd,-2)   # between-trial precision = (1/between-trial variance)
+dRCT[1]<-0   # No treatment effect for reference treatment
+sdRCT ~ dunif(0,5)   # vague prior for between-trial heterogeneity
+tauRCT <- pow(sd,-2)
 
 for (c in 1:(ntRCT-1)) {  
-	for (k in (c+1):ntRCT) { ## Calculate pairwise comparisons
-	or[c,k]<-exp(d[k]-d[c])
-	lor[c,k]<-(d[k]-d[c])}}
+	for (k in (c+1):ntRCT) { # Pairwise comparisons
+	orRCT[c,k]<-exp(dRCT[k]-dRCT[c])
+	lorRCT[c,k]<-(dRCT[k]-dRCT[c])}}
 
 #At design-level, with case-control studies
+for(i in 1:nsCC){
+	wCC[i,1] <- 0
+	deltaCC[i,bsCC[i]] <- 0
+	muCC[i] ~ dnorm(0,.0001)
+
+	for (k in 1:naCC[i]) {
+
+		rCC[i,k] ~ dbin(pCC[i,k],nCC[i,k])
+		logit(pCC[i,k]) <- muCC[i] + deltaCC[i,tCC[i,k]]
+		rhatCC[i,k] <- pCC[i,k] * nCC[i,k]
+		devCC[i,k] <- 2 * (rCC[i,k] * (log(rCC[i,k])-log(rhatCC[i,k]))
+				+ (nCC[i,k]-rCC[i,k]) * (log(nCC[i,k]-rCC[i,k]) - log(nCC[i,k]-rhatCC[i,k])))
+			}
+
+ 	resdevCC[i] <- sum(devCC[i,1:naCC[i]])
+
+ 	for (k in 2:noTCC[i]) {
+ 		deltaCC[i,inCC[i,k]] ~ dnorm(mdCC[i,inCC[i,k]],taudCC[i,inCC[i,k]])
+ 		mdCC[i,inCC[i,k]] <- dCC[inCC[i,k]] - dCC[bsCC[i]] + swCC[i,k]
+		taudCC[i,inCC[i,k]] <- tauCC *2*(k-1)/k
+ 		wCC[i,k] <- (deltaCC[i,inCC[i,k]] - dCC[inCC[i,k]] + dCC[bsCC[i]])
+		swCC[i,k] <- sum(wCC[i,1:k-1])/(k-1)
+ 			}
+ 		}
+
+totresdevCC <- sum(resdevCC[])
+
+dCC[1]<-0
+sdCC ~ dunif(0,5)
+tauCC <- pow(sd,-2)
+
+for (c in 1:(ntCC-1)) {  
+	for (k in (c+1):ntCC) {
+	orCC[c,k]<-exp(dCC[k]-dCC[c])
+	lorCC[c,k]<-(dCC[k]-dCC[c])}}
+
 #At design-level, with retrospective studies
+for(i in 1:nsRC){
+	wRC[i,1] <- 0
+	deltaRC[i,bsRC[i]] <- 0
+	muRC[i] ~ dnorm(0,.0001)
+
+	for (k in 1:naRC[i]) {
+
+		rRC[i,k] ~ dbin(pRC[i,k],nRC[i,k])
+		logit(pRC[i,k]) <- muRC[i] + deltaRC[i,tRC[i,k]]
+		rhatRCR[i,k] <- pRC[i,k] * nRC[i,k]
+		devRC[i,k] <- 2 * (rRC[i,k] * (log(rRC[i,k])-log(rhatRC[i,k]))
+				+ (nRC[i,k]-rRC[i,k]) * (log(nRC[i,k]-rRC[i,k]) - log(nRC[i,k]-rhatRC[i,k])))
+			}
+
+ 	resdevRC[i] <- sum(devRC[i,1:naRC[i]])
+
+ 	for (k in 2:noTRC[i]) {
+ 		deltaRC[i,inRC[i,k]] ~ dnorm(mdRC[i,inRC[i,k]],taudRC[i,inRC[i,k]])
+ 		mdRC[i,inRC[i,k]] <- dRC[inRC[i,k]] - dRC[bsRC[i]] + swRC[i,k]
+		taudRC[i,inRC[i,k]] <- tauRC *2*(k-1)/k
+ 		wRC[i,k] <- (deltaRC[i,inRC[i,k]] - dRC[inRC[i,k]] + dRC[bsRC[i]])
+		swRC[i,k] <- sum(wRC[i,1:k-1])/(k-1)
+ 			}
+ 		}
+
+totresdevRC <- sum(resdevRC[])
+
+dRC[1]<-0
+sdRC ~ dunif(0,5)
+tauRC <- pow(sd,-2)
+
+for (c in 1:(ntRC-1)) {  
+	for (k in (c+1):ntRC) {
+	orRC[c,k]<-exp(dRC[k]-dRC[c])
+	lorRC[c,k]<-(dRC[k]-dRC[c])}}
+
 #At design-level, with prospective studies
+for(i in 1:nsPC){
+	wPC[i,1] <- 0
+	deltaPC[i,bsPC[i]] <- 0
+	muPC[i] ~ dnorm(0,.0001)
 
+	for (k in 1:naPC[i]) {
 
+		rPC[i,k] ~ dbin(pPC[i,k],nPC[i,k])
+		logit(pPC[i,k]) <- muPC[i] + deltaPC[i,tPC[i,k]]
+		rhatPC[i,k] <- pPC[i,k] * nPC[i,k]
+		devPC[i,k] <- 2 * (rPC[i,k] * (log(rPC[i,k])-log(rhatPC[i,k]))
+				+ (nPC[i,k]-rPC[i,k]) * (log(nPC[i,k]-rPC[i,k]) - log(nPC[i,k]-rhatPC[i,k])))
+			}
 
-}  # *** PROGRAM ENDS
+ 	resdevPC[i] <- sum(devPC[i,1:naPC[i]])
+
+ 	for (k in 2:noTPC[i]) {
+ 		deltaPC[i,inPC[i,k]] ~ dnorm(mdPC[i,inPC[i,k]],taudPC[i,inPC[i,k]])
+ 		mdPC[i,inPC[i,k]] <- dPC[inPC[i,k]] - dPC[bsPC[i]] + swPC[i,k]
+		taudPC[i,inPC[i,k]] <- tauPC *2*(k-1)/k
+ 		wPC[i,k] <- (deltaPC[i,inPC[i,k]] - dPC[inPC[i,k]] + dPC[bsPC[i]])
+		swPC[i,k] <- sum(wPC[i,1:k-1])/(k-1)
+ 			}
+ 		}
+
+totresdevPC <- sum(resdevPC[])
+
+dPC[1]<-0
+sdPC ~ dunif(0,5)
+tauPC <- pow(sd,-2) 
+
+for (c in 1:(ntPC-1)) {  
+	for (k in (c+1):ntPC) {
+	orPC[c,k]<-exp(dPC[k]-dPC[c])
+	lorPC[c,k]<-(dPC[k]-dPC[c])}}
+
+}  #END
