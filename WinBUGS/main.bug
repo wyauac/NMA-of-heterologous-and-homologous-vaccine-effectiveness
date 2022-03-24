@@ -38,6 +38,7 @@ for(k in 1:ntALL){ # treatment ranking
   worst[k]<-equals(rkworst[k],1) #probability of being worst
   rkbest[k]<-rank(d[],k) # best first
   best[k]<-equals(rkbest[k],1)} #probability of being best
+
 #At design-level, with RCTs
 for(i in 1:nsRCT){ #loop through studies
 	wRCT[i,1] <- 0 
