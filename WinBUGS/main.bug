@@ -1,0 +1,73 @@
+model{
+
+#Overall level, with all studies
+for (k in 2:ntALL){				## Random Effects to combine study type level effects
+  dRCT[k]~dnorm(d[k],tauALL)
+  dOBS[k]~dnorm(d[k],tauALL)}
+for (k in (ntALL+1):ntRCT){			## Treatments not common in all designs. No changes where no additional information
+  dRCT[k]~dnorm(0,0.0001)
+  d[k]<-dRCT[k]}
+
+d[1]<-0
+for (k in 2:ntALL){d[k]~dnorm(0,0.0001)}	## Prior distributions
+
+sdALL~dunif(0,5)
+tauALL<-pow(sdALL,-2)
+
+## Calculate pairwise comparisons
+for (c in 1:(nt-1)) {  
+  for (k in (c+1):nt) {
+	  or[c,k]<-exp(d[k]-d[c])
+	  lor[c,k]<-(d[k]-d[c])}}
+
+#Rank the treatment effects
+for(k in 1:nt){
+  rkworst[k]<-nt+1-rank(d[],k) #ranking treatment worst first
+  worst[k]<-equals(rkworst[k],1) #probability that treat is worst
+  rkbest[k]<-rank(d[],k) #ranking treatment best first
+  best[k]<-equals(rkbest[k],1)}
+
+#At design-level, with RCTs
+for(i in 1:nsRCT){  # LOOP THROUGH STUDIES
+	wRCT[i,1] <- 0   # adjustment for multi-arm trials is zero for control arm
+	deltaRCT[i,1] <- 0  # treatment effect is zero for control arm
+	muRCT[i] ~ dnorm(0,.0001)  # vague priors for all trial baselines
+
+	for (k in 1:naRCT[i]) {  # LOOP THROUGH ARMS
+
+		rRCT[i,k] ~ dbin(pRCT[i,k],nRCT[i,k])  # binomial likelihood
+
+		# Logistic regression model with reference to arm 1
+		logit(pRCT[i,k]) <- muRCT[i] + deltaRCT[i,tRCT[i,k]]
+		rhatRCR[i,k] <- pRCT[i,k] * nRCT[i,k]  # expected value of the numerators
+		devRCT[i,k] <- 2 * (rRCT[i,k] * (log(rRCT[i,k])-log(rhatRCT[i,k])) #Deviance contribution
+				+ (nRCT[i,k]-rRCT[i,k]) * (log(nRCT[i,k]-rRCT[i,k]) - log(nRCT[i,k]-rhatRCT[i,k])))
+			}
+
+ 	resdevRCT[i] <- sum(devRCT[i,1:naRCT[i]])  # summed residual deviance contribution for this trial
+
+ 	for (k in 2:noTRCT[i]) {  # LOOP THROUGH ARMS
+ 		deltaRCT[i,tRCT[i,k]] ~ dnorm(mdRCT[i,k],taudRCT[i,k]) # trial-specific LOR distributions
+ 		mdRCT[i,k] <- dRCT[t[i,k]] - dRCT[t[i,1]] + swRCT[i,k]  # mean of LOR distributions (with multi-arm trial correction)
+		taudRCT[i,tRCT[i,k]] <- tauRCT *2*(k-1)/k  # precision of LOR distributions (with multi-arm trial correction)
+ 		wRCT[i,k] <- (deltaRCT[i,tRCT[i,k]] - dRCT[t[i,k]] + dRCT[t[i,1]]) # adjustment for multi-arm RCTs
+		swRCT[i,k] <- sum(wRCT[i,1:k-1])/(k-1) # cumulative adjustment for multi-arm trials
+ 			}
+ 		}
+
+totresdevRCT <- sum(resdevRCT[])   # Total Residual Deviance
+
+dRCT[1]<-0   # treatment effect is zero for reference treatment
+sdRCT ~ dunif(0,5)   # vague prior for between-trial SD
+tauRCT <- pow(sd,-2)   # between-trial precision = (1/between-trial variance)
+
+for (c in 1:(ntRCT-1)) {  
+	for (k in (c+1):ntRCT) { ## Calculate pairwise comparisons
+	or[c,k]<-exp(d[k]-d[c])
+	lor[c,k]<-(d[k]-d[c])}}
+
+
+
+
+
+}  # *** PROGRAM ENDS
