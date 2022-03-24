@@ -1,15 +1,15 @@
 model{
 
-#Overall level, with all studies
-for (k in 2:ntALL){				# Random Effects in combining studies from different study designs
+##Overall level, with all studies
+for (k in 2:ntALL){ ## Random Effects in combining studies from different study designs
   dRCT[k]~dnorm(d[k],tauALL)
   dOBS[k]~dnorm(d[k],tauALL)}
-for (k in (ntALL+1):ntRCT){			# Treatments not common to all designs
+for (k in (ntALL+1):ntRCT){ ## Treatments not common to all designs
   dRCT[k]~dnorm(0,0.0001)
   d[k]<-dRCT[k]}
 
 d[1]<-0
-for (k in 2:ntALL){d[k]~dnorm(0,0.0001)}	# Prior distributions
+for (k in 2:ntALL){d[k]~dnorm(0,0.0001)} ## Prior distributions
 
 sdALL~dunif(0,5) # Prior for overall heterogeneity
 tauALL<-pow(sdALL,-2)
