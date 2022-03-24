@@ -10,50 +10,48 @@ for(i in 1:nsRCT){  # LOOP THROUGH STUDIES
 		rRCT[i,k] ~ dbin(pRCT[i,k],nRCT[i,k])  # binomial likelihood
 
 		# Logistic regression model with reference to arm 1
-		logit(pRCT[i,k]) <- muRCT[i] + deltaRCT[i,tRCT[i,k]] +(myoungRCT[i,tRCT[i,k]]-myoungRCT[i,tRCT[i,1]]) * youngRCT[i] 
-					+(madultRCT[i,tRCT[i,k]]-madultRCT[i,tRCT[i,k]]) * adultRCT[i] 
-					+ (melderRCT[i,tRCT[i,k]]-melderRCT[i,tRCT[i,k]]) * elderRCT[i]
-		rhat[i,k] <- p[i,k] * n[i,k]  # expected value of the numerators
-		dev[i,k] <- 2 * (r[i,k] * (log(r[i,k])-log(rhat[i,k])) #Deviance contribution
-				+ (n[i,k]-r[i,k]) * (log(n[i,k]-r[i,k]) - log(n[i,k]-rhat[i,k])))
+		logit(pRCT[i,k]) <- muRCT[i] + deltaRCT[i,tRCT[i,k]] 
+					+(myoungRCT[tRCT[i,k]]-myoungRCT[tRCT[i,1]]) * youngRCT[i] 
+					+(madultRCT[tRCT[i,k]]-madultRCT[tRCT[i,1]]) * adultRCT[i] 
+					+ (melderRCT[tRCT[i,k]]-melderRCT[tRCT[i,1]]) * elderRCT[i]
+		rhatRCR[i,k] <- pRCT[i,k] * nRCT[i,k]  # expected value of the numerators
+		devRCT[i,k] <- 2 * (rRCT[i,k] * (log(rRCT[i,k])-log(rhatRCT[i,k])) #Deviance contribution
+				+ (nRCT[i,k]-rRCT[i,k]) * (log(nRCT[i,k]-rRCT[i,k]) - log(nRCT[i,k]-rhatRCT[i,k])))
 			}
 
- 	resdev[i] <- sum(dev[i,1:na[i]])  # summed residual deviance contribution for this trial
+ 	resdevRCT[i] <- sum(devRCT[i,1:naRCT[i]])  # summed residual deviance contribution for this trial
 
- 	for (k in 2:na[i]) {  # LOOP THROUGH ARMS
- 		delta[i,k] ~ dnorm(md[i,k],taud[i,k]) # trial-specific LOR distributions
- 		md[i,k] <- d[t[i,k]] - d[t[i,1]] + sw[i,k]  # mean of LOR distributions (with multi-arm trial correction)
-		taud[i,k] <- tau *2*(k-1)/k  # precision of LOR distributions (with multi-arm trial correction)
- 		w[i,k] <- (delta[i,k] - d[t[i,k]] + d[t[i,1]]) # adjustment for multi-arm RCTs
-		sw[i,k] <- sum(w[i,1:k-1])/(k-1) # cumulative adjustment for multi-arm trials
+ 	for (k in 2:noTRCT[i]) {  # LOOP THROUGH ARMS
+ 		deltaRCT[i,tRCT[i,k]] ~ dnorm(mdRCT[i,k],taudRCT[i,k]) # trial-specific LOR distributions
+ 		mdRCT[i,k] <- dRCT[t[i,k]] - dRCT[t[i,1]] + swRCT[i,k]  # mean of LOR distributions (with multi-arm trial correction)
+		taudRCT[i,tRCT[i,k]] <- tauRCT *2*(k-1)/k  # precision of LOR distributions (with multi-arm trial correction)
+ 		wRCT[i,k] <- (deltaRCT[i,tRCT[i,k]] - dRCT[t[i,k]] + dRCT[t[i,1]]) # adjustment for multi-arm RCTs
+		swRCT[i,k] <- sum(wRCT[i,1:k-1])/(k-1) # cumulative adjustment for multi-arm trials
  			}
  		}
 
-totresdev <- sum(resdev[])   # Total Residual Deviance
+totresdevRCT <- sum(resdevRCT[])   # Total Residual Deviance
 
-d[1]<-0   # treatment effect is zero for reference treatment
-mage[1] <- 0   # covariate effect is zero for reference treatment
-msex[1] <- 0 
-m[1] <- 0
-mage[1] <- 0 
+dRCT[1]<-0   # treatment effect is zero for reference treatment
+myoungRCT[1] <- 0   # covariate effect is zero for reference treatment
+madultRCT[1] <- 0 
+melderRCT[1] <- 0
 
-#Adding in hierarchical effect where the different study designs are incorporated
-#D.d[1] refers to RCTs, D.d[2] refers to case-control studies, D.d[3] refers to retrospective cohort studies,
-#D.d[4] refers to prospective cohort studies
+myoungRCT[k] <- M   # common covariate effect
+madultRCT[k] <- M 
+melderRCT[k] <- M
 
-d[2]~dnorm(D.d[1], prec.d) #RCTs
-d[3]~dnorm(D.d[1], prec.d) #Case-control studies
-d[4]~dnorm(D.d[3], prec.d) #Retrospective studies
-d[5]~dnorm(D.d[4], prec.d) #Prospective studies
+M ~ dnorm(0,.0001)  # vague prior for covariate effect
 
-for (k in 2:nt){   # LOOP THROUGH TREATMENTS
-	d[k] ~ dnorm(0,.0001)  # vague priors for treatment effects
- 	beta[k] <- B   # common covariate effect
-	}
+sdRCT ~ dunif(0,5)   # vague prior for between-trial SD
+tauRCT <- pow(sd,-2)   # between-trial precision = (1/between-trial variance)
 
-B ~ dnorm(0,.0001)  # vague prior for covariate effect
-sd ~ dunif(0,5)   # vague prior for between-trial SD
-tau <- pow(sd,-2)   # between-trial precision = (1/between-trial variance)
+for (c in 1:(ntRCT-1)) {  
+	for (k in (c+1):ntRCT) { ## Calculate indirect comparisons
+	or[c,k]<-exp(d[k]-d[c])
+	lor[c,k]<-(d[k]-d[c])}}
+
+
 
 
 
