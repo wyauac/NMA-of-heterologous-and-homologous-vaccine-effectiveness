@@ -1,38 +1,39 @@
 model{
 
-for(i in 1:nsRCT){  # LOOP THROUGH STUDIES
-	wRCT[i,1] <- 0   # adjustment for multi-arm trials is zero for control arm
-	deltaRCT[i,1] <- 0  # treatment effect is zero for control arm
+#For RCTs
+for(i in 1:nsRCT){  # Loop through studies
+	wRCT[i,1] <- 0   # No adjustment in multi-arm for reference arm
+	deltaRCT[i,bsRCT[i]] <- 0  # No treatment effect for reference arm
 	muRCT[i] ~ dnorm(0,.0001)  # vague priors for all trial baselines
 
-	for (k in 1:naRCT[i]) {  # LOOP THROUGH ARMS
+	for (k in 1:naRCT[i]) {  # Loop through arms
 
-		rRCT[i,k] ~ dbin(pRCT[i,k],nRCT[i,k])  # binomial likelihood
+		rRCT[i,k] ~ dbin(pRCT[i,k],nRCT[i,k])  # Binomial likelihood
 
-		# Logistic regression model with reference to arm 1
-		logit(pRCT[i,k]) <- muRCT[i] + deltaRCT[i,tRCT[i,k]] 
-					+(myoungRCT[tRCT[i,k]]-myoungRCT[tRCT[i,1]]) * youngRCT[i] 
-					+(madultRCT[tRCT[i,k]]-madultRCT[tRCT[i,1]]) * adultRCT[i] 
-					+ (melderRCT[tRCT[i,k]]-melderRCT[tRCT[i,1]]) * elderRCT[i]
-		rhatRCR[i,k] <- pRCT[i,k] * nRCT[i,k]  # expected value of the numerators
-		devRCT[i,k] <- 2 * (rRCT[i,k] * (log(rRCT[i,k])-log(rhatRCT[i,k])) #Deviance contribution
+		# Logistic regression model comparing to reference arm
+		logit(pRCT[i,k]) <- muRCT[i] + deltaRCT[i,tRCT[i,k]]
+					+(myoungRCT[inRCT[i,k]]-myoungRCT[bsRCT[i]]) * youngRCT[i] 
+					+(madultRCT[inRCT[i,k]]-madultRCT[bsRCT[i]]) * adultRCT[i] 
+					+ (melderRCT[inRCT[i,k]]-melderRCT[bsRCT[i]]) * elderRCT[i]
+		rhatRCR[i,k] <- pRCT[i,k] * nRCT[i,k]  # expected value of cases
+		devRCT[i,k] <- 2 * (rRCT[i,k] * (log(rRCT[i,k])-log(rhatRCT[i,k])) #Deviance
 				+ (nRCT[i,k]-rRCT[i,k]) * (log(nRCT[i,k]-rRCT[i,k]) - log(nRCT[i,k]-rhatRCT[i,k])))
 			}
 
- 	resdevRCT[i] <- sum(devRCT[i,1:naRCT[i]])  # summed residual deviance contribution for this trial
+ 	resdevRCT[i] <- sum(devRCT[i,1:naRCT[i]])  # Summed residual deviance
 
  	for (k in 2:noTRCT[i]) {  # LOOP THROUGH ARMS
- 		deltaRCT[i,tRCT[i,k]] ~ dnorm(mdRCT[i,k],taudRCT[i,k]) # trial-specific LOR distributions
- 		mdRCT[i,k] <- dRCT[t[i,k]] - dRCT[t[i,1]] + swRCT[i,k]  # mean of LOR distributions (with multi-arm trial correction)
-		taudRCT[i,tRCT[i,k]] <- tauRCT *2*(k-1)/k  # precision of LOR distributions (with multi-arm trial correction)
- 		wRCT[i,k] <- (deltaRCT[i,tRCT[i,k]] - dRCT[t[i,k]] + dRCT[t[i,1]]) # adjustment for multi-arm RCTs
-		swRCT[i,k] <- sum(wRCT[i,1:k-1])/(k-1) # cumulative adjustment for multi-arm trials
+ 		deltaRCT[i,inRCT[i,k]] ~ dnorm(mdRCT[i,inRCT[i,k]],taudRCT[i,inRCT[i,k]]) # Study-specific log odds-ratio distributions
+ 		mdRCT[i,inRCT[i,k]] <- dRCT[inRCT[i,k]] - dRCT[bsRCT[i]] + swRCT[i,k]  # mean of log odds-ratios corrected for multi-arm
+		taudRCT[i,inRCT[i,k]] <- tauRCT *2*(k-1)/k  # precision of log odds-ratios corrected for multi-arm
+ 		wRCT[i,k] <- (deltaRCT[i,inRCT[i,k]] - dRCT[inRCT[i,k]] + dRCT[bsRCT[i]]) # adjustment for multi-arm
+		swRCT[i,k] <- sum(wRCT[i,1:k-1])/(k-1)
  			}
  		}
 
 totresdevRCT <- sum(resdevRCT[])   # Total Residual Deviance
 
-dRCT[1]<-0   # treatment effect is zero for reference treatment
+dRCT[1]<-0   # No treatment effect for reference treatment
 myoungRCT[1] <- 0   # covariate effect is zero for reference treatment
 madultRCT[1] <- 0 
 melderRCT[1] <- 0
@@ -43,16 +44,168 @@ melderRCT[k] <- M
 
 M ~ dnorm(0,.0001)  # vague prior for covariate effect
 
-sdRCT ~ dunif(0,5)   # vague prior for between-trial SD
-tauRCT <- pow(sd,-2)   # between-trial precision = (1/between-trial variance)
+sdRCT ~ dunif(0,5)   # vague prior for between-trial heterogeneity
+tauRCT <- pow(sd,-2)
 
 for (c in 1:(ntRCT-1)) {  
-	for (k in (c+1):ntRCT) { ## Calculate indirect comparisons
-	or[c,k]<-exp(d[k]-d[c])
-	lor[c,k]<-(d[k]-d[c])}}
+	for (k in (c+1):ntRCT) { # Pairwise comparisons
+	orRCT[c,k]<-exp(dRCT[k]-dRCT[c])
+	lorRCT[c,k]<-(dRCT[k]-dRCT[c])}}
 
+#For case-control studies
+for(i in 1:nsCC){  # Loop through studies
+	wCC[i,1] <- 0   # No adjustment in multi-arm for reference arm
+	deltaCC[i,bsCC[i]] <- 0  # No treatment effect for reference arm
+	muCC[i] ~ dnorm(0,.0001)  # vague priors for all trial baselines
 
+	for (k in 1:naCC[i]) {  # Loop through arms
 
+		rCC[i,k] ~ dbin(pCC[i,k],nCC[i,k])  # Binomial likelihood
 
+		# Logistic regression model comparing to reference arm
+		logit(pCC[i,k]) <- muCC[i] + deltaCC[i,tCC[i,k]]
+					+(myoungCC[inCC[i,k]]-myoungCC[bsCC[i]]) * youngCC[i] 
+					+(madultCC[inCC[i,k]]-madultCC[bsCC[i]]) * adultCC[i] 
+					+ (melderCC[inCC[i,k]]-melderCC[bsCC[i]]) * elderCC[i]
+		rhatRCR[i,k] <- pCC[i,k] * nCC[i,k]  # expected value of cases
+		devCC[i,k] <- 2 * (rCC[i,k] * (log(rCC[i,k])-log(rhatCC[i,k])) #Deviance
+				+ (nCC[i,k]-rCC[i,k]) * (log(nCC[i,k]-rCC[i,k]) - log(nCC[i,k]-rhatCC[i,k])))
+			}
+
+ 	resdevCC[i] <- sum(devCC[i,1:naCC[i]])  # Summed residual deviance
+
+ 	for (k in 2:noTCC[i]) {  # LOOP THROUGH ARMS
+ 		deltaCC[i,inCC[i,k]] ~ dnorm(mdCC[i,inCC[i,k]],taudCC[i,inCC[i,k]]) # Study-specific log odds-ratio distributions
+ 		mdCC[i,inCC[i,k]] <- dCC[inCC[i,k]] - dCC[bsCC[i]] + swCC[i,k]  # mean of log odds-ratios corrected for multi-arm
+		taudCC[i,inCC[i,k]] <- tauCC *2*(k-1)/k  # precision of log odds-ratios corrected for multi-arm
+ 		wCC[i,k] <- (deltaCC[i,inCC[i,k]] - dCC[inCC[i,k]] + dCC[bsCC[i]]) # adjustment for multi-arm
+		swCC[i,k] <- sum(wCC[i,1:k-1])/(k-1)
+ 			}
+ 		}
+
+totresdevCC <- sum(resdevCC[])   # Total Residual Deviance
+
+dCC[1]<-0   # No treatment effect for reference treatment
+myoungCC[1] <- 0   # covariate effect is zero for reference treatment
+madultCC[1] <- 0 
+melderCC[1] <- 0
+
+myoungCC[k] <- M   # common covariate effect
+madultCC[k] <- M 
+melderCC[k] <- M
+
+M ~ dnorm(0,.0001)  # vague prior for covariate effect
+
+sdCC ~ dunif(0,5)   # vague prior for between-trial heterogeneity
+tauCC <- pow(sd,-2)
+
+for (c in 1:(ntCC-1)) {  
+	for (k in (c+1):ntCC) { # Pairwise comparisons
+	orCC[c,k]<-exp(dCC[k]-dCC[c])
+	lorCC[c,k]<-(dCC[k]-dCC[c])}}
+
+#For retrospective studies
+for(i in 1:nsRC){  # Loop through studies
+	wRC[i,1] <- 0   # No adjustment in multi-arm for reference arm
+	deltaRC[i,bsRC[i]] <- 0  # No treatment effect for reference arm
+	muRC[i] ~ dnorm(0,.0001)  # vague priors for all trial baselines
+
+	for (k in 1:naRC[i]) {  # Loop through arms
+
+		rRC[i,k] ~ dbin(pRC[i,k],nRC[i,k])  # Binomial likelihood
+
+		# Logistic regression model comparing to reference arm
+		logit(pRC[i,k]) <- muRC[i] + deltaRC[i,tRC[i,k]]
+					+(myoungRC[inRC[i,k]]-myoungRC[bsRC[i]]) * youngRC[i] 
+					+(madultRC[inRC[i,k]]-madultRC[bsRC[i]]) * adultRC[i] 
+					+ (melderRC[inRC[i,k]]-melderRC[bsRC[i]]) * elderRC[i]
+		rhatRCR[i,k] <- pRC[i,k] * nRC[i,k]  # expected value of cases
+		devRC[i,k] <- 2 * (rRC[i,k] * (log(rRC[i,k])-log(rhatRC[i,k])) #Deviance
+				+ (nRC[i,k]-rRC[i,k]) * (log(nRC[i,k]-rRC[i,k]) - log(nRC[i,k]-rhatRC[i,k])))
+			}
+
+ 	resdevRC[i] <- sum(devRC[i,1:naRC[i]])  # Summed residual deviance
+
+ 	for (k in 2:noTRC[i]) {  # LOOP THROUGH ARMS
+ 		deltaRC[i,inRC[i,k]] ~ dnorm(mdRC[i,inRC[i,k]],taudRC[i,inRC[i,k]]) # Study-specific log odds-ratio distributions
+ 		mdRC[i,inRC[i,k]] <- dRC[inRC[i,k]] - dRC[bsRC[i]] + swRC[i,k]  # mean of log odds-ratios corrected for multi-arm
+		taudRC[i,inRC[i,k]] <- tauRC *2*(k-1)/k  # precision of log odds-ratios corrected for multi-arm
+ 		wRC[i,k] <- (deltaRC[i,inRC[i,k]] - dRC[inRC[i,k]] + dRC[bsRC[i]]) # adjustment for multi-arm
+		swRC[i,k] <- sum(wRC[i,1:k-1])/(k-1)
+ 			}
+ 		}
+
+totresdevRC <- sum(resdevRC[])   # Total Residual Deviance
+
+dRC[1]<-0   # No treatment effect for reference treatment
+myoungRC[1] <- 0   # covariate effect is zero for reference treatment
+madultRC[1] <- 0 
+melderRC[1] <- 0
+
+myoungRC[k] <- M   # common covariate effect
+madultRC[k] <- M 
+melderRC[k] <- M
+
+M ~ dnorm(0,.0001)  # vague prior for covariate effect
+
+sdRC ~ dunif(0,5)   # vague prior for between-trial heterogeneity
+tauRC <- pow(sd,-2)
+
+for (c in 1:(ntRC-1)) {  
+	for (k in (c+1):ntRC) { # Pairwise comparisons
+	orRC[c,k]<-exp(dRC[k]-dRC[c])
+	lorRC[c,k]<-(dRC[k]-dRC[c])}}
+
+#For prospective studies
+for(i in 1:nsPC){  # Loop through studies
+	wPC[i,1] <- 0   # No adjustment in multi-arm for reference arm
+	deltaPC[i,bsPC[i]] <- 0  # No treatment effect for reference arm
+	muPC[i] ~ dnorm(0,.0001)  # vague priors for all trial baselines
+
+	for (k in 1:naPC[i]) {  # Loop through arms
+
+		rPC[i,k] ~ dbin(pPC[i,k],nPC[i,k])  # Binomial likelihood
+
+		# Logistic regression model comparing to reference arm
+		logit(pPC[i,k]) <- muPC[i] + deltaPC[i,tPC[i,k]]
+					+(myoungPC[inPC[i,k]]-myoungPC[bsPC[i]]) * youngPC[i] 
+					+(madultPC[inPC[i,k]]-madultPC[bsPC[i]]) * adultPC[i] 
+					+ (melderPC[inPC[i,k]]-melderPC[bsPC[i]]) * elderPC[i]
+		rhatRCR[i,k] <- pPC[i,k] * nPC[i,k]  # expected value of cases
+		devPC[i,k] <- 2 * (rPC[i,k] * (log(rPC[i,k])-log(rhatPC[i,k])) #Deviance
+				+ (nPC[i,k]-rPC[i,k]) * (log(nPC[i,k]-rPC[i,k]) - log(nPC[i,k]-rhatPC[i,k])))
+			}
+
+ 	resdevPC[i] <- sum(devPC[i,1:naPC[i]])  # Summed residual deviance
+
+ 	for (k in 2:noTPC[i]) {  # LOOP THROUGH ARMS
+ 		deltaPC[i,inPC[i,k]] ~ dnorm(mdPC[i,inPC[i,k]],taudPC[i,inPC[i,k]]) # Study-specific log odds-ratio distributions
+ 		mdPC[i,inPC[i,k]] <- dPC[inPC[i,k]] - dPC[bsPC[i]] + swPC[i,k]  # mean of log odds-ratios corrected for multi-arm
+		taudPC[i,inPC[i,k]] <- tauPC *2*(k-1)/k  # precision of log odds-ratios corrected for multi-arm
+ 		wPC[i,k] <- (deltaPC[i,inPC[i,k]] - dPC[inPC[i,k]] + dPC[bsPC[i]]) # adjustment for multi-arm
+		swPC[i,k] <- sum(wPC[i,1:k-1])/(k-1)
+ 			}
+ 		}
+
+totresdevPC <- sum(resdevPC[])   # Total Residual Deviance
+
+dPC[1]<-0   # No treatment effect for reference treatment
+myoungPC[1] <- 0   # covariate effect is zero for reference treatment
+madultPC[1] <- 0 
+melderPC[1] <- 0
+
+myoungPC[k] <- M   # common covariate effect
+madultPC[k] <- M 
+melderPC[k] <- M
+
+M ~ dnorm(0,.0001)  # vague prior for covariate effect
+
+sdPC ~ dunif(0,5)   # vague prior for between-trial heterogeneity
+tauPC <- pow(sd,-2)
+
+for (c in 1:(ntPC-1)) {  
+	for (k in (c+1):ntPC) { # Pairwise comparisons
+	orPC[c,k]<-exp(dPC[k]-dPC[c])
+	lorPC[c,k]<-(dPC[k]-dPC[c])}}
 
 }  # *** PROGRAM ENDS
