@@ -1,7 +1,7 @@
 library(R2jags)
 library(dplyr)
 
-setwd("D:\\temp_NMA_data")
+setwd("\PATH\TO\FILE")
 
 read.datafile<-("export_VPB_main_docinfect.csv")
 datafile<-read.csv(read.datafile, header = TRUE, fileEncoding = "UTF-8-BOM")
