@@ -1,0 +1,181 @@
+#Consistency model
+model{
+	
+dCC[2]~dnorm(d[2],tauALL)
+dPC[2]~dnorm(d[2],tauALL)
+dRC[2]~dnorm(d[2],tauALL)
+dRCT[2]~dnorm(d[2],tauALL)
+
+dPC[3]~dnorm(d[3],tauALL)
+dRC[3]~dnorm(d[3],tauALL)
+dRCT[3]~dnorm(d[3],tauALL)
+
+dCC[4]~dnorm(d[4],tauALL)
+dRCT[4]~dnorm(d[4],tauALL)
+
+dRCT[5]~dnorm(d[5],tauALL)
+
+dCC[6]~dnorm(d[6],tauALL)
+dPC[6]~dnorm(d[6],tauALL)
+dRCT[6]~dnorm(d[6],tauALL)
+
+dRC[7]~dnorm(d[7],tauALL)
+dPC[7]~dnorm(d[7],tauALL)
+dCC[7]~dnorm(d[7],tauALL)
+
+dRCT[8]~dnorm(d[8],tauALL)
+
+dPC[9]~dnorm(d[9],tauALL)
+dRC[9]~dnorm(d[9],tauALL)
+
+dCC[10]~dnorm(d[10],tauALL)
+dRC[10]~dnorm(d[10],tauALL)
+
+dCC[11]~dnorm(d[11],tauALL)
+
+for (k in 2:ntALL){d[k]~dnorm(0.1,0.001)}
+d[1]<-0
+
+sdALL~dunif(0,10) # prior for overall heterogeneity
+tauALL<-pow(sdALL,-2)
+
+for (c in 1:(ntALL-1)) {  # pairwise comparisons
+	for (k in (c+1):ntALL) {
+		or[c,k]<-exp(d[k]-d[c])
+		lor[c,k]<-(d[k]-d[c])}}
+
+rk_bad <- rank(d[])   ## assume events are "bad"
+rk_good <- rank(-d[]) ## assume events are "good"
+for(k in 1:ntALL){
+	rk[k] <- rk_good[k]*equals(0, 1) + rk_bad[k] * equals(0, 0)
+}
+
+for (k in 1:ntALL) {
+	for (j in 1:ntALL) {
+		effectiveness[k,j] <- equals(rk[k],j)}}
+
+for (k in 1:ntALL) {
+	for (j in 1:ntALL) {
+		cumeffectiveness[k,j] <- sum(effectiveness[k, 1:j])}}
+
+for (k in 1:ntALL) {
+	SUCRA[k] <- sum(cumeffectiveness[k,1:(ntALL-1)])/(ntALL-1)}
+
+#At design-level, with RCTs
+for(i in 1:18){ #loop through studies
+	wRCT[i,1] <- 0
+	deltaRCT[i,t[i,1]] <- 0 
+	muRCT[i] ~ dnorm(0,0.001)
+
+	for (k in 1:na[i]) { #loop through arms
+
+		r[i,k] ~ dbin(pRCT[i,t[i,k]],n[i,k]) #binomial likelihood
+		logit(pRCT[i,t[i,k]]) <- muRCT[i] + deltaRCT[i,t[i,k]] #logistic regression model
+		rhatRCT[i,k] <- pRCT[i,t[i,k]] * n[i,k]
+		dev[i,k] <- 2 * (r[i,k] * (log(r[i,k])-log(rhatRCT[i,k])) #deviance
+				+ (n[i,k]-r[i,k]) * (log(n[i,k]-r[i,k]) - log(n[i,k]-rhatRCT[i,k])))}
+
+resdev[i] <- sum(dev[i,1:na[i]]) #sum of deviance
+
+for (k in 2:na[i]) { #loop through treatments
+	#Distribution of log odds ratio
+	deltaRCT[i,t[i,k]] ~ dnorm(mdRCT[i,t[i,k]],taudRCT[i,t[i,k]])
+	mdRCT[i,t[i,k]] <- dRCT[t[i,k]] - dRCT[t[i,1]] + swRCT[i,k] #arm correction
+	taudRCT[i,t[i,k]] <- tauRCT *2*(k-1)/k
+	#multi-arm adjustment
+	wRCT[i,k] <- (deltaRCT[i,t[i,k]] - dRCT[t[i,k]] + dRCT[t[i,1]])
+	swRCT[i,k] <- sum(wRCT[i,2:k-1])/(k-1)}}
+
+dRCT[1]<-0 #no effect in reference treatment
+sdRCT ~ dunif(0,10) #prior of heterogeneity
+tauRCT <- pow(sdRCT,-2)
+
+#At design-level, with case-control studies
+for(i in 31:43){ #loop through studies
+	wCC[i,1] <- 0
+	deltaCC[i,t[i,1]] <- 0 
+	muCC[i] ~ dnorm(0,0.001)
+
+	for (k in 1:na[i]) { #loop through arms
+
+		r[i,k] ~ dbin(pCC[i,t[i,k]],n[i,k]) #binomial likelihood
+		logit(pCC[i,t[i,k]]) <- muCC[i] + deltaCC[i,t[i,k]] #logistic regression model
+		rhatCC[i,k] <- pCC[i,t[i,k]] * n[i,k]
+		dev[i,k] <- 2 * (r[i,k] * (log(r[i,k])-log(rhatCC[i,k])) #deviance
+				+ (n[i,k]-r[i,k]) * (log(n[i,k]-r[i,k]) - log(n[i,k]-rhatCC[i,k])))}
+
+resdev[i] <- sum(dev[i,1:na[i]]) #sum of deviance
+
+for (k in 2:na[i]) { #loop through treatments
+	#Distribution of log odds ratio
+	deltaCC[i,t[i,k]] ~ dnorm(mdCC[i,t[i,k]],taudCC[i,t[i,k]])
+	mdCC[i,t[i,k]] <- dCC[t[i,k]] - dCC[t[i,1]] + swCC[i,k] #arm correction
+	taudCC[i,t[i,k]] <- tauCC *2*(k-1)/k
+	#multi-arm adjustment
+	wCC[i,k] <- (deltaCC[i,t[i,k]] - dCC[t[i,k]] + dCC[t[i,1]])
+	swCC[i,k] <- sum(wCC[i,2:k-1])/(k-1)}}
+
+dCC[1]<-0 #no effect in reference treatment
+sdCC ~ dunif(0,10) #prior of heterogeneity
+tauCC <- pow(sdCC,-2)
+	
+#At design-level, with retrospective cohort studies
+for(i in 19:25){ #loop through studies
+  wRC[i,1] <- 0
+  deltaRC[i,t[i,1]] <- 0 
+  muRC[i] ~ dnorm(0,0.001)
+  
+  for (k in 1:na[i]) { #loop through arms
+    
+    r[i,k] ~ dbin(pRC[i,t[i,k]],n[i,k]) #binomial likelihood
+	logit(pRC[i,t[i,k]]) <- muRC[i] + deltaRC[i,t[i,k]] #logistic regression model
+    rhatRC[i,k] <- pRC[i,t[i,k]] * n[i,k]
+    dev[i,k] <- 2 * (r[i,k] * (log(r[i,k])-log(rhatRC[i,k])) #deviance
+                        + (n[i,k]-r[i,k]) * (log(n[i,k]-r[i,k]) - log(n[i,k]-rhatRC[i,k])))}
+  
+  resdev[i] <- sum(dev[i,1:na[i]]) #sum of deviance
+  
+  for (k in 2:na[i]) { #loop through treatments
+    #Distribution of log odds ratio
+    deltaRC[i,t[i,k]] ~ dnorm(mdRC[i,t[i,k]],taudRC[i,t[i,k]])
+    mdRC[i,t[i,k]] <- dRC[t[i,k]] - dRC[t[i,1]] + swRC[i,k] #arm correction
+    taudRC[i,t[i,k]] <- tauRC *2*(k-1)/k
+    #multi-arm adjustment
+    wRC[i,k] <- (deltaRC[i,t[i,k]] - dRC[t[i,k]] + dRC[t[i,1]])
+    swRC[i,k] <- sum(wRC[i,2:k-1])/(k-1)}}
+
+dRC[1]<-0 #no effect in reference treatment
+sdRC ~ dunif(0,10) #prior of heterogeneity
+tauRC <- pow(sdRC,-2)
+
+#At design-level, with prospective cohort studies
+for(i in 26:30){ #loop through studies
+  wPC[i,1] <- 0
+  deltaPC[i,t[i,1]] <- 0 
+  muPC[i] ~ dnorm(0,0.001)
+  
+  for (k in 1:na[i]) { #loop through arms
+    
+    r[i,k] ~ dbin(pPC[i,t[i,k]],n[i,k]) #binomial likelihood
+	logit(pPC[i,t[i,k]]) <- muPC[i] + deltaPC[i,t[i,k]] #logistic regression model
+    rhatPC[i,k] <- pPC[i,t[i,k]] * n[i,k]
+    dev[i,k] <- 2 * (r[i,k] * (log(r[i,k])-log(rhatPC[i,k])) #deviance
+                        + (n[i,k]-r[i,k]) * (log(n[i,k]-r[i,k]) - log(n[i,k]-rhatPC[i,k])))}
+  
+  resdev[i] <- sum(dev[i,1:na[i]]) #sum of deviance
+  
+  for (k in 2:na[i]) { #loop through treatments
+    #Distribution of log odds ratio
+    deltaPC[i,t[i,k]] ~ dnorm(mdPC[i,t[i,k]],taudPC[i,t[i,k]])
+    mdPC[i,t[i,k]] <- dPC[t[i,k]] - dPC[t[i,1]] + swPC[i,k] #arm correction
+    taudPC[i,t[i,k]] <- tauPC *2*(k-1)/k
+    wPC[i,k] <- (deltaPC[i,t[i,k]] - dPC[t[i,k]] + dPC[t[i,1]])
+    swPC[i,k] <- sum(wPC[i,2:k-1])/(k-1)}}
+
+totresdev <- sum(resdev[]) #total deviance
+
+dPC[1]<-0 #no effect in reference treatment
+sdPC ~ dunif(0,10) #prior of heterogeneity
+tauPC <- pow(sdPC,-2)
+
+}
