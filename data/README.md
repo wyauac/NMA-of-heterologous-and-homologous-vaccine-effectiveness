@@ -1,0 +1,16 @@
+Data for vaccine-product-based (VPB) and platform-based (PFB) analysis of the five outcomes:
+documented COVID-19 infection (docinfect)
+symptomatic COVID-19 infection (symp)
+severe COVID-19 infection (severe)
+COVID-19 related hospitalization (hosp)
+COVID-19 related death (death)
+
+Parameters:
+d=log odds of intervention k
+lor=log odds ratio
+rk=ranking
+sdALL=between-design heterogeneity
+sdRCT=heterogeneity among RCTs
+sdRC=heterogeneity among retrospective cohort studies
+sdPC=heterogeneity among prospective cohort studies
+sdCC=heterogeneity among case-control studies
