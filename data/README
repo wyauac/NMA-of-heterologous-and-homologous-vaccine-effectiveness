@@ -14,3 +14,10 @@ sdRCT=heterogeneity among RCTs
 sdRC=heterogeneity among retrospective cohort studies
 sdPC=heterogeneity among prospective cohort studies
 sdCC=heterogeneity among case-control studies
+
+Abbreviations:
+Randomized controlled trial (RCT)
+Case-control study (CC)
+Retrospective cohort study (RC)
+Prospective cohort study (PC)
+Vaccine effectiveness (VE)
